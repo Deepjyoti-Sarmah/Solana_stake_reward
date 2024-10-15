@@ -3,6 +3,7 @@ import { Program } from "@coral-xyz/anchor";
 import { SolStakingRewards } from "../target/types/sol_staking_rewards";
 import { Connection, Keypair, PublicKey } from "@solana/web3.js";
 import { createMint, getOrCreateAssociatedTokenAccount, mintTo } from "@solana/spl-token";
+import { assert } from "chai";
 
 describe("sol_staking_rewards", () => {
   // Configure the client to use the local cluster.
@@ -21,7 +22,8 @@ describe("sol_staking_rewards", () => {
   //     145, 224, 10, 84, 243, 143, 47, 197, 32
   //   ]
   // ));
-  console.log(mintKeypair);
+
+  // console.log(mintKeypair);
 
   const program = anchor.workspace.SolStakingRewards as Program<SolStakingRewards>;
 
@@ -39,21 +41,21 @@ describe("sol_staking_rewards", () => {
 
   it("Is initialized!", async () => {
     await createMintToken();
-  
+
     let [vaultAccount] = PublicKey.findProgramAddressSync(
       [Buffer.from("vault")],
       program.programId,
     );
-  
+
     const tx = await program.methods
       .initialize()
       .accounts({
         signer: payer.publicKey,
-        tokenVaultAccount: vaultAccount, 
+        tokenVaultAccount: vaultAccount,
         mint: mintKeypair.publicKey,
       })
       .rpc();
-  
+
     console.log("Your transaction signature", tx);
   });
 
@@ -104,9 +106,13 @@ describe("sol_staking_rewards", () => {
       .rpc();
 
     console.log("Your transaction signature", tx);
+
+    const stakeInfoAccount = await program.account.stakeInfo.fetch(stakeInfo);
+    assert.isTrue(stakeInfoAccount.isStaked);
+    assert.isAbove(stakeInfoAccount.lockEndTime.toNumber(), Math.floor(Date.now() / 1000));
   });
 
-  it("destake", async () => {
+  it("destake failed before lock period ends", async () => {
     let userTokenAccount = await getOrCreateAssociatedTokenAccount(
       connection,
       payer.payer,
@@ -118,7 +124,7 @@ describe("sol_staking_rewards", () => {
       [Buffer.from("vault")],
       program.programId,
     );
-  
+
 
     let [stakeInfo] = PublicKey.findProgramAddressSync(
       [Buffer.from("stake_info"), payer.publicKey.toBuffer()],
@@ -146,20 +152,91 @@ describe("sol_staking_rewards", () => {
       1e21
     );
 
-    const tx = await program.methods
-      .destake()
-      .signers([payer.payer])
-      .accounts({
-        stakeAccount: stakeAccount,
-        stakeInfoAccount: stakeInfo,
-        userTokenAccount: userTokenAccount.address,
-        tokenVaultAccount: vaultAccount,
-        signer: payer.publicKey,
-        mint: mintKeypair.publicKey
-      })
-      .rpc();
+    try {
+      const tx = await program.methods
+        .destake()
+        .signers([payer.payer])
+        .accounts({
+          stakeAccount: stakeAccount,
+          stakeInfoAccount: stakeInfo,
+          userTokenAccount: userTokenAccount.address,
+          tokenVaultAccount: vaultAccount,
+          signer: payer.publicKey,
+          mint: mintKeypair.publicKey
+        })
+        .rpc();
 
-    console.log("Your transaction signature", tx);
+      console.log("Your transaction signature", tx);
+      assert.fail("Destake should have failed due to lock period");
+    } catch (error) {
+      assert.include(error.message, "Lock period has not ended yet");
+    }
   });
 
+  // it("destake successful after lock period ends", async () => {
+  //   const currentTimestamp = Math.floor(Date.now() / 1000);
+  //   const tenYearsInSecods = 10 * 365 * 24 * 60 * 60;
+
+  //   await connection.simulateTransaction(new anchor.web3.Transaction(), [payer.payer], {
+  //     minContextSlot: currentTimestamp + tenYearsInSecods
+  //   });
+
+  //   let userTokenAccount = await getOrCreateAssociatedTokenAccount(
+  //     connection,
+  //     payer.payer,
+  //     mintKeypair.publicKey,
+  //     payer.publicKey
+  //   );
+
+  //   let [vaultAccount] = PublicKey.findProgramAddressSync(
+  //     [Buffer.from("vault")],
+  //     program.programId,
+  //   );
+
+
+  //   let [stakeInfo] = PublicKey.findProgramAddressSync(
+  //     [Buffer.from("stake_info"), payer.publicKey.toBuffer()],
+  //     program.programId
+  //   );
+
+  //   let [stakeAccount] = PublicKey.findProgramAddressSync(
+  //     [Buffer.from("token"), payer.publicKey.toBuffer()],
+  //     program.programId
+  //   );
+
+  //   await getOrCreateAssociatedTokenAccount(
+  //     connection,
+  //     payer.payer,
+  //     mintKeypair.publicKey,
+  //     payer.publicKey,
+  //   );
+
+  //   await mintTo(
+  //     connection,
+  //     payer.payer,
+  //     mintKeypair.publicKey,
+  //     vaultAccount,
+  //     payer.payer,
+  //     1e21
+  //   );
+
+  //   const tx = await program.methods
+  //     .destake()
+  //     .signers([payer.payer])
+  //     .accounts({
+  //       stakeAccount: stakeAccount,
+  //       stakeInfoAccount: stakeInfo,
+  //       userTokenAccount: userTokenAccount.address,
+  //       tokenVaultAccount: vaultAccount,
+  //       signer: payer.publicKey,
+  //       mint: mintKeypair.publicKey
+  //     })
+  //     .rpc();
+
+  //   console.log("your transaction signature", tx);
+
+  //   const stakeInfoAccount = await program.account.stakeInfo.fetch(stakeInfo);
+  //   assert.isFalse(stakeInfoAccount.isStaked);
+  //   assert.equal(stakeInfoAccount.lockEndTime.toNumber(), 0);
+  // });
 });

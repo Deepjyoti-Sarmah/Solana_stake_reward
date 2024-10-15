@@ -17,7 +17,6 @@ pub mod constants {
 
 #[program]
 pub mod sol_staking_rewards {
-
     use super::*;
 
     pub fn initialize(_ctx: Context<Initialize>) -> Result<()> {
