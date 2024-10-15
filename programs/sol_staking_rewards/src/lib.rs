@@ -12,10 +12,13 @@ pub mod constants {
     pub const VAULT_SEED: &[u8] = b"vault";
     pub const STAKE_INFO_SEED: &[u8] = b"stake_info";
     pub const TOKEN_SEED: &[u8] = b"token";
+    pub const LOCK_DURATION: i64 = 10 * 365 * 24 * 60 * 60;
 }
 
 #[program]
 pub mod sol_staking_rewards {
+    use solana_program::sysvar::clock;
+
     use super::*;
 
     pub fn initialize(_ctx: Context<Initialize>) -> Result<()> {
@@ -37,6 +40,7 @@ pub mod sol_staking_rewards {
 
         stake_info.stake_at_slot = clock.slot;
         stake_info.is_staked = true;
+        stake_info.lock_end_time = clock.unix_timestamp + constants::LOCK_DURATION;
 
         let stake_amount = (amount)
             .checked_mul(10u64.pow(ctx.accounts.mint.decimals as u32))
@@ -65,6 +69,11 @@ pub mod sol_staking_rewards {
         }
 
         let clock = Clock::get()?;
+
+        if clock.unix_timestamp < stake_info.lock_end_time {
+            return Err(ErrorCode::LockPeriodNotEnded.into());
+        }
+
         let slots_passed = clock.slot - stake_info.stake_at_slot;
 
         let staked_amount = ctx.accounts.stake_account.amount;
@@ -108,6 +117,7 @@ pub mod sol_staking_rewards {
 
         stake_info.is_staked = false;
         stake_info.stake_at_slot = clock.slot;
+        stake_info.lock_end_time = 0;
 
         Ok(())
     }
@@ -213,6 +223,7 @@ pub struct DeStake<'info> {
 pub struct StakeInfo {
     pub stake_at_slot: u64,
     pub is_staked: bool,
+    pub lock_end_time: i64
 }
 
 #[error_code]
@@ -223,4 +234,6 @@ pub enum ErrorCode {
     NotStaked,
     #[msg("No Token to stake")]
     NoTokens,
+    #[msg("Lock period has not ended yet")]
+    LockPeriodNotEnded
 }

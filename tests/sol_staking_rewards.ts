@@ -10,18 +10,18 @@ describe("sol_staking_rewards", () => {
   anchor.setProvider(provider);
   const payer = provider.wallet as anchor.Wallet;
   const connection = new Connection("http://127.0.0.1:8899", "confirmed");
-  // const mintKeypair = Keypair.generate();
-  const mintKeypair = Keypair.fromSecretKey(new Uint8Array(
-    [
-      175, 127, 120, 225, 97, 13, 108, 166, 145, 23, 85,
-      220, 206, 176, 11, 157, 156, 175, 58, 202, 126, 119,
-      206, 204, 242, 27, 253, 96, 40, 204, 146, 103, 10,
-      5, 175, 122, 148, 5, 50, 6, 14, 9, 250, 134,
-      254, 229, 117, 29, 216, 70, 118, 69, 1, 123, 232,
-      145, 224, 10, 84, 243, 143, 47, 197, 32
-    ]
-  ));
-  // console.log(mintKeypair);
+  const mintKeypair = Keypair.generate();
+  // const mintKeypair = Keypair.fromSecretKey(new Uint8Array(
+  //   [
+  //     175, 127, 120, 225, 97, 13, 108, 166, 145, 23, 85,
+  //     220, 206, 176, 11, 157, 156, 175, 58, 202, 126, 119,
+  //     206, 204, 242, 27, 253, 96, 40, 204, 146, 103, 10,
+  //     5, 175, 122, 148, 5, 50, 6, 14, 9, 250, 134,
+  //     254, 229, 117, 29, 216, 70, 118, 69, 1, 123, 232,
+  //     145, 224, 10, 84, 243, 143, 47, 197, 32
+  //   ]
+  // ));
+  console.log(mintKeypair);
 
   const program = anchor.workspace.SolStakingRewards as Program<SolStakingRewards>;
 
@@ -38,7 +38,7 @@ describe("sol_staking_rewards", () => {
   }
 
   it("Is initialized!", async () => {
-    // await createMintToken();
+    await createMintToken();
   
     let [vaultAccount] = PublicKey.findProgramAddressSync(
       [Buffer.from("vault")],
