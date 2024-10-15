@@ -3,7 +3,6 @@ import { Program } from "@coral-xyz/anchor";
 import { SolStakingRewards } from "../target/types/sol_staking_rewards";
 import { Connection, Keypair, PublicKey } from "@solana/web3.js";
 import { createMint, getOrCreateAssociatedTokenAccount, mintTo } from "@solana/spl-token";
-import { publicKey } from "@coral-xyz/anchor/dist/cjs/utils";
 
 describe("sol_staking_rewards", () => {
   // Configure the client to use the local cluster.
@@ -39,30 +38,22 @@ describe("sol_staking_rewards", () => {
   }
 
   it("Is initialized!", async () => {
-
     // await createMintToken();
-
+  
     let [vaultAccount] = PublicKey.findProgramAddressSync(
       [Buffer.from("vault")],
       program.programId,
     );
-
-    // const tx = await program.methods.initialize()
-    //   .accounts({
-    //     signer: payer.publicKey,
-    //     tokenVaultAccount: vaultAccount,
-    //     mint: mintKeypair.publicKey
-    //   })
-    //   .rpc();
+  
     const tx = await program.methods
       .initialize()
       .accounts({
         signer: payer.publicKey,
-        tokenVaultAccount: vaultAccount,
+        tokenVaultAccount: vaultAccount, 
         mint: mintKeypair.publicKey,
       })
       .rpc();
-
+  
     console.log("Your transaction signature", tx);
   });
 
@@ -116,18 +107,59 @@ describe("sol_staking_rewards", () => {
   });
 
   it("destake", async () => {
+    let userTokenAccount = await getOrCreateAssociatedTokenAccount(
+      connection,
+      payer.payer,
+      mintKeypair.publicKey,
+      payer.publicKey
+    );
+
+    let [vaultAccount] = PublicKey.findProgramAddressSync(
+      [Buffer.from("vault")],
+      program.programId,
+    );
+  
+
+    let [stakeInfo] = PublicKey.findProgramAddressSync(
+      [Buffer.from("stake_info"), payer.publicKey.toBuffer()],
+      program.programId
+    );
+
+    let [stakeAccount] = PublicKey.findProgramAddressSync(
+      [Buffer.from("token"), payer.publicKey.toBuffer()],
+      program.programId
+    );
+
+    await getOrCreateAssociatedTokenAccount(
+      connection,
+      payer.payer,
+      mintKeypair.publicKey,
+      payer.publicKey,
+    );
+
+    await mintTo(
+      connection,
+      payer.payer,
+      mintKeypair.publicKey,
+      vaultAccount,
+      payer.payer,
+      1e21
+    );
 
     const tx = await program.methods
       .destake()
       .signers([payer.payer])
       .accounts({
-
+        stakeAccount: stakeAccount,
+        stakeInfoAccount: stakeInfo,
+        userTokenAccount: userTokenAccount.address,
+        tokenVaultAccount: vaultAccount,
+        signer: payer.publicKey,
+        mint: mintKeypair.publicKey
       })
       .rpc();
 
-
     console.log("Your transaction signature", tx);
-
-
   });
+
 });

@@ -1,5 +1,4 @@
 use anchor_lang::prelude::*;
-
 use anchor_spl::{
     associated_token::AssociatedToken,
     token::{transfer, Mint, Token, TokenAccount, Transfer},
@@ -74,7 +73,7 @@ pub mod sol_staking_rewards {
             .checked_mul(10u64.pow(ctx.accounts.mint.decimals as u32))
             .unwrap();
 
-        let bump = *ctx.bumps.get("token_vault_account").unwrap();
+        let bump = ctx.bumps.token_vault_account;
         let signer: &[&[&[u8]]] = &[&[constants::VAULT_SEED, &[bump]]];
 
         transfer(
@@ -91,8 +90,7 @@ pub mod sol_staking_rewards {
         )?;
 
         let staker = ctx.accounts.signer.key();
-        // let bump = *ctx.bumps.get("stake_account").unwrap();
-        let bump = *ctx.bumps.get("stake_account").unwrap();
+        let bump = ctx.bumps.stake_account;
         let signer: &[&[&[u8]]] = &[&[constants::TOKEN_SEED, staker.as_ref(), &[bump]]];
 
         transfer(
@@ -178,12 +176,9 @@ pub struct DeStake<'info> {
     pub signer: Signer<'info>,
 
     #[account(
-        init_if_needed,
+        mut,
         seeds = [constants::VAULT_SEED],
         bump,
-        payer = signer,
-        token::mint = mint,
-        token::authority = token_vault_account,
     )]
     pub token_vault_account: Account<'info, TokenAccount>,
 
