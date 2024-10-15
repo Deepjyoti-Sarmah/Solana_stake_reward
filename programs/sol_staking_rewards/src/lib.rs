@@ -17,7 +17,6 @@ pub mod constants {
 
 #[program]
 pub mod sol_staking_rewards {
-    use solana_program::sysvar::clock;
 
     use super::*;
 
