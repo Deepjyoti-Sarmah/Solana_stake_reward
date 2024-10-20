@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use anchor_spl::{
     associated_token::AssociatedToken,
-    token::{transfer, Mint, Token, TokenAccount, Transfer},
+    token::{self, transfer, Mint, MintTo, Burn, Token, TokenAccount, Transfer},
 };
 
 use solana_program::clock::Clock;
@@ -56,6 +56,24 @@ pub mod sol_staking_rewards {
             stake_amount
         )?;
 
+        // Mint equivalent amount of BontSOL tokens to the user
+        let bonksol_amount = stake_amount; // 1:1 ratio
+        let cpi_accounts = MintTo {
+            mint: ctx.accounts.bonksol_mint.to_account_info(),
+            to: ctx.accounts.user_bonksol_token_account.to_account_info(),
+            authority: ctx.accounts.signer.to_account_info(),
+        };
+
+        let cpi_program = ctx.accounts.token_program.to_account_info();
+        let cpi_ctx = CpiContext::new(cpi_program, cpi_accounts);
+        token::mint_to(cpi_ctx, bonksol_amount)?;
+
+        emit!(StakeEvent {
+            staker: ctx.accounts.signer.key(),
+            amount: stake_amount,
+            timestamp: clock.unix_timestamp,
+        });
+
         Ok(())
     }
 
@@ -73,8 +91,18 @@ pub mod sol_staking_rewards {
         }
 
         let slots_passed = clock.slot - stake_info.stake_at_slot;
-
         let staked_amount = ctx.accounts.stake_account.amount;
+
+        //Burn BonkSOL token from user 
+        let cpi_accounts = Burn {
+            mint: ctx.accounts.bonksol_mint.to_account_info(),
+            from: ctx.accounts.user_bonksol_token_account.to_account_info(),
+            authority: ctx.accounts.signer.to_account_info(),
+        };
+
+        let cpi_program = ctx.accounts.token_program.to_account_info();
+        let cpi_ctx = CpiContext::new(cpi_program, cpi_accounts);
+        token::burn(cpi_ctx, staked_amount)?;
 
         let reward = (slots_passed as u64)
             .checked_mul(10u64.pow(ctx.accounts.mint.decimals as u32))
@@ -117,6 +145,13 @@ pub mod sol_staking_rewards {
         stake_info.stake_at_slot = clock.slot;
         stake_info.lock_end_time = 0;
 
+        emit!(DestakeEvent {
+            stake: ctx.accounts.signer.key(),
+            amount: staked_amount,
+            reward: reward,
+            timestamp: clock.unix_timestamp,
+        });
+
         Ok(())
     }
 }
@@ -135,6 +170,14 @@ pub struct Initialize<'info> {
         token::authority = token_vault_account,
     )]
     pub token_vault_account: Account<'info, TokenAccount>,
+
+    #[account(
+        init_if_needed,
+        mint::decimals = 9,
+        mint::authority = signer,
+        payer = signer
+    )]
+    pub bonksol_mint: Account<'info, Mint>, //BonkSOL mint
 
     pub mint: Account<'info, Mint>,
     pub token_program: Program<'info, Token>,
@@ -171,6 +214,14 @@ pub struct Stake<'info> {
         associated_token::authority = signer,
     )]
     pub user_token_account: Account<'info, TokenAccount>,
+
+    #[account(
+        mut,
+        associated_token::mint = bonksol_mint,
+        associated_token::authority = signer,
+    )]
+    pub user_bonksol_token_account: Account<'info, TokenAccount>,
+    pub bonksol_mint: Account<'info, Mint>,
 
     pub mint: Account<'info, Mint>,
     pub token_program: Program<'info, Token>,
@@ -211,6 +262,14 @@ pub struct DeStake<'info> {
     )]
     pub user_token_account: Account<'info, TokenAccount>,
 
+    #[account(
+        mut,
+        associated_token::mint = bonksol_mint,
+        associated_token::authority = signer,
+    )]
+    pub user_bonksol_token_account: Account<'info, TokenAccount>,
+    pub bonksol_mint: Account<'info, Mint>,
+
     pub mint: Account<'info, Mint>,
     pub token_program: Program<'info, Token>,
     pub associated_token_program: Program<'info, AssociatedToken>,
@@ -222,6 +281,21 @@ pub struct StakeInfo {
     pub stake_at_slot: u64,
     pub is_staked: bool,
     pub lock_end_time: i64
+}
+
+#[event]
+pub struct StakeEvent {
+    pub staker: Pubkey,
+    pub amount: u64,
+    pub timestamp: i64,
+}
+
+#[event]
+pub struct DestakeEvent {
+    pub stake: Pubkey,
+    pub amount: u64,
+    pub reward: u64,
+    pub timestamp: i64,
 }
 
 #[error_code]
